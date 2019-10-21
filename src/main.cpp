@@ -1,92 +1,44 @@
+#include <cstdint>
+#include <list>
 #include "Arduino.h"
-#include "ESP8266WiFi.h"
+#include "painlessMesh.h"
 #include "core.h"
-#include "my_secrets.h"
-#include <ESP8266WebServer.h>
+#include "my_secrets.h" // <-- here goes RC_SSID and RC_WLAN_PASSWORD
 
 const uint32_t LED_1 = D2;
 const uint32_t LED_2 = D5;
 const uint32_t LED_3 = D6;
 const uint32_t LED_4 = D1;
-wl_status_t oldStatus = WL_NO_SHIELD;
-const IPAddress IP(192, 168, 10, 73);
-const IPAddress GATEWAY(192, 168, 10, 101);
-const IPAddress SUBNET(255, 255, 255, 0);
+bool clientsConnected = false;
+painlessMesh network;
 
-ESP8266WebServer server(80);
-
-void handleNotFound(){
-  server.send(404, "text/plain", "Not found");
+void checkClients() {
+    std::list<uint32_t> nodes = network.getNodeList();
+    clientsConnected = (nodes.size() > 0);
+    digitalWrite(LED_4, clientsConnected ? HIGH : LOW);
 }
 
-void handleKeepAlive(){
-    server.send(201, "text/plain", "Still alive :)");
-    digitalWrite(LED_4, HIGH);
-    delay(100);
-    digitalWrite(LED_4, LOW);
-    Serial.print(".");
+void receivedCallback(uint32_t from, String &msg) {
+    Serial.printf("startHere: Received from %d msg=%s\n", from, msg.c_str());
 }
 
-void handleRC() {
-    server.send(201, "text/plain", "OK");
-    Serial.println(server.args());
+void newConnectionCallback(bool adopt) {
+    Serial.printf("startHere: New Connection, adopt=%d\n", adopt);
 }
 
 void setup() {
+    serial::init();
     pinMode(LED_1, OUTPUT);
     pinMode(LED_2, OUTPUT);
     pinMode(LED_3, OUTPUT);
     pinMode(LED_4, OUTPUT);
-    serial::init();
-    WiFi.mode(WIFI_STA);
-    WiFi.config(IP, GATEWAY, SUBNET);
-    WiFi.setSleepMode(WIFI_NONE_SLEEP);
-    WiFi.setAutoReconnect(true);
-    WiFi.begin(RC_SSID, RC_WLAN_PASSWORD);
-    server.on("/keep-alive", handleKeepAlive);
-    server.on("/rc", handleRC);
-    server.onNotFound(handleNotFound);
-    server.begin();
+    network.setDebugMsgTypes(ERROR | MESH_STATUS | CONNECTION | SYNC | COMMUNICATION | GENERAL | MSG_TYPES | REMOTE); // all types on
+    //network.setDebugMsgTypes(ERROR | STARTUP);  // set before init() so that you can see startup messages
+    network.init(RC_SSID, RC_WLAN_PASSWORD);
+    network.onReceive(&receivedCallback);
+    network.onNewConnection(&newConnectionCallback);
 }
 
 void loop() {
-    server.handleClient();
-    wl_status_t status = WiFi.status();
-    if (status != oldStatus) {
-        oldStatus = status;
-        if (status == WL_NO_SHIELD)
-            Serial.println("WL_NO_SHIELD");
-        else if (status == WL_IDLE_STATUS)
-            Serial.println("WL_IDLE_STATUS");
-        else if (status == WL_NO_SSID_AVAIL)
-            Serial.println("WL_NO_SSID_AVAIL");
-        else if (status == WL_SCAN_COMPLETED)
-            Serial.println("WL_SCAN_COMPLETED");
-        else if (status == WL_CONNECTED)
-            Serial.println("WL_CONNECTED");
-        else if (status == WL_CONNECT_FAILED)
-            Serial.println("WL_CONNECT_FAILED");
-        else if (status == WL_CONNECTION_LOST)
-            Serial.println("WL_CONNECTION_LOST");
-        else if (status == WL_DISCONNECTED)
-            Serial.println("WL_DISCONNECTED");
-        else
-            Serial.println("unknown status");
-    }
-    if (!WiFi.isConnected()) {
-        digitalWrite(LED_1, HIGH);
-        delay(100);
-        digitalWrite(LED_1, LOW);
-        delay(100);
-    } else {
-        digitalWrite(LED_1, HIGH);
-    }
+    network.update();
 }
-
-// client:
-// if (server.arg(“Temperature”)== “”){     //Parameter not found
-//     message = “Temperature Argument not found”;
-// }else{     //Parameter found
-//     message = “Temperature Argument = “;
-//     message += server.arg(“Temperature”);     //Gets the value of the query parameter
-// }
