@@ -30,6 +30,17 @@ void handleKeepAlive(){
 void handleRC() {
     server.send(201, "text/plain", "OK");
     Serial.println(server.args());
+    uint32_t speed = atoi(server.arg("a").c_str());
+    if (server.arg("d1") == "1") {
+        digitalWrite(LED_2, HIGH);
+        delay(speed/2);
+        digitalWrite(LED_2, LOW);
+    }
+    if (server.arg("d2") == "1") {
+        digitalWrite(LED_3, HIGH);
+        delay(speed/2);
+        digitalWrite(LED_3, LOW);
+    }
 }
 
 void setup() {
@@ -82,11 +93,3 @@ void loop() {
         digitalWrite(LED_1, HIGH);
     }
 }
-
-// client:
-// if (server.arg(“Temperature”)== “”){     //Parameter not found
-//     message = “Temperature Argument not found”;
-// }else{     //Parameter found
-//     message = “Temperature Argument = “;
-//     message += server.arg(“Temperature”);     //Gets the value of the query parameter
-// }
